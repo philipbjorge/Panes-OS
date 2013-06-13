@@ -1,4 +1,7 @@
 #Panes-OS
+
+![Latest Build](latest.png)
+
 Panes-OS is a hobby operating system with currently undefined scope, features, and design decisions.
 
 Currently, the only decision that I've made is that the OS will be written in C.
