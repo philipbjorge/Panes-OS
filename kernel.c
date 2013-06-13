@@ -43,8 +43,14 @@ size_t strlen(const char* str)
     return ret;
 }
  
-static const size_t VGA_WIDTH = 80;
-static const size_t VGA_HEIGHT = 24;
+#define _VGA_WIDTH 80
+#define _VGA_HEIGHT 24
+#define _VGA_LASTROW 23
+static const size_t VGA_WIDTH = _VGA_WIDTH;
+static const size_t VGA_HEIGHT = _VGA_HEIGHT;
+static const size_t VGA_H_OVERFLOW = _VGA_HEIGHT;
+static const size_t VGA_W_OVERFLOW = _VGA_WIDTH;
+static const size_t VGA_LASTROW = _VGA_LASTROW;
  
 size_t terminal_row;
 size_t terminal_column;
@@ -66,6 +72,23 @@ void terminal_initialize()
         }
     }
 }
+
+// Moves all VGA text up a row, replacing the bottom row with spaces
+void terminal_scroll() {
+    for (size_t y = 0; y < VGA_HEIGHT; y++) {
+        for (size_t x = 0; x < VGA_WIDTH; x++) {
+            const size_t index = y * VGA_WIDTH + x;
+            const size_t lookahead_index = index + VGA_WIDTH;
+
+            if (y == VGA_LASTROW)
+                terminal_buffer[index] = make_vgaentry(' ', terminal_color);
+            else
+                terminal_buffer[index] = terminal_buffer[lookahead_index];
+        }
+    }
+    terminal_row = VGA_LASTROW;
+    terminal_column = 0;
+}
  
 void terminal_setcolor(uint8_t color)
 {
@@ -78,30 +101,52 @@ void terminal_putentryat(char c, uint8_t color, size_t x, size_t y)
     terminal_buffer[index] = make_vgaentry(c, color);
 }
  
-void terminal_putchar(char c)
-{
-    terminal_putentryat(c, terminal_color, terminal_column, terminal_row);
-    if ( ++terminal_column == VGA_WIDTH )
-    {
-        terminal_column = 0;
-        if ( ++terminal_row == VGA_HEIGHT )
-        {
-            terminal_row = 0;
+// Put a character in the VGA terminal
+// Supports linewrapping, newlines, and terminal scrolling
+void terminal_putchar(char c) {
+    // Print character with line wrapping
+    if (c != '\n') {
+        terminal_putentryat(c, terminal_color, terminal_column, terminal_row);
+        if (++terminal_column == VGA_W_OVERFLOW) {
+            terminal_column = 0;
+            if (++terminal_row == VGA_H_OVERFLOW)
+                terminal_scroll();
         }
+    } else {
+        // Newline special case
+        terminal_column = 0;
+        if (++terminal_row == VGA_H_OVERFLOW)
+            terminal_scroll();
     }
 }
- 
-void terminal_writestring(const char* data)
-{
+
+// Write a string to the VGA terminal
+void terminal_writestring(const char* data) {
     size_t datalen = strlen(data);
-    for ( size_t i = 0; i < datalen; i++ )
+    for (size_t i = 0; i < datalen; i++)
         terminal_putchar(data[i]);
 }
+
+// Print the Panes-OS logo in full RGB color!
+void terminal_writelogo() {
+    uint8_t old_color = terminal_color;
+
+    terminal_color = make_color(COLOR_LIGHT_RED, COLOR_BLACK);
+    terminal_putchar('P');
+    terminal_putchar('a');
+    terminal_color = make_color(COLOR_LIGHT_GREEN, COLOR_BLACK);
+    terminal_putchar('n');
+    terminal_putchar('e');
+    terminal_color = make_color(COLOR_LIGHT_BLUE, COLOR_BLACK);
+    terminal_putchar('s');
+    terminal_writestring("-OS");
+
+    terminal_color = old_color;
+}
  
-void kernel_main()
-{
+void kernel_main() {
     terminal_initialize();
-    /* Since there is no support for newlines in terminal_putchar yet, \n will
-       produce some VGA specific character instead. This is normal. */
-    terminal_writestring("Hello, kernel World!\n");
+    terminal_writestring("Welcome to ");
+    terminal_writelogo();
+    terminal_writestring("!\n");
 }
